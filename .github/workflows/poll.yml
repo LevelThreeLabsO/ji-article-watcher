@@ -1,0 +1,44 @@
+name: JI article watcher
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # every 5 min (GitHub may delay/skip ticks under load)
+  workflow_dispatch:         # lets you trigger a run manually from the Actions tab
+
+# Allow the job to commit the updated state file back to the repo.
+permissions:
+  contents: write
+
+# If a run is still going when the next tick fires, let it finish; don't stack.
+concurrency:
+  group: poll
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - run: python poll.py
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Commit updated state
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- watcher_state.json; then
+            git add watcher_state.json
+            git commit -m "Update watcher state [skip ci]"
+            git push
+          else
+            echo "No state change to commit."
+          fi
