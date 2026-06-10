@@ -1,10 +1,14 @@
 name: JI article watcher
 
 on:
-  # Triggered every 5 min by an external pinger (cron-job.org) that calls the
-  # workflow_dispatch API. GitHub's own `schedule` cron is too unreliable for
-  # 5-min cadence (observed multi-hour gaps), so we don't use it.
+  # PRIMARY trigger: an external pinger (cron-job.org) calls this every 5 min
+  # via the workflow_dispatch API — that's what gives us reliable 5-min cadence.
   workflow_dispatch:
+  # FALLBACK only: GitHub's own schedule is laggy/best-effort (multi-hour gaps
+  # observed), but if the pinger ever stops, this keeps the watcher alive rather
+  # than going silent. Concurrency + the state file prevent any double-posting.
+  schedule:
+    - cron: "*/15 * * * *"
 
 # Allow the job to commit the updated state file back to the repo.
 permissions:
