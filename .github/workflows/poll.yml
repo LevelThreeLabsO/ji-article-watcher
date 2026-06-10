@@ -1,9 +1,10 @@
 name: JI article watcher
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"   # every 5 min (GitHub may delay/skip ticks under load)
-  workflow_dispatch:         # lets you trigger a run manually from the Actions tab
+  # Triggered every 5 min by an external pinger (cron-job.org) that calls the
+  # workflow_dispatch API. GitHub's own `schedule` cron is too unreliable for
+  # 5-min cadence (observed multi-hour gaps), so we don't use it.
+  workflow_dispatch:
 
 # Allow the job to commit the updated state file back to the repo.
 permissions:
