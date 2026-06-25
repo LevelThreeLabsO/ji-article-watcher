@@ -20,6 +20,10 @@ from pathlib import Path
 import requests
 
 WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
+# Shared secret so JI's host can allowlist this watcher past Cloudflare's bot
+# block. Set as the JI_BYPASS_TOKEN repo secret; sent as a request header that
+# a Cloudflare rule on JI's side matches to skip the block. Empty = no header.
+BYPASS_TOKEN = os.environ.get("JI_BYPASS_TOKEN", "")
 
 API_URL = (
     "https://jewishinsider.com/wp-json/wp/v2/posts"
@@ -33,7 +37,10 @@ USER_AGENT = (
 
 
 def fetch_posts():
-    resp = requests.get(API_URL, headers={"User-Agent": USER_AGENT}, timeout=30)
+    headers = {"User-Agent": USER_AGENT}
+    if BYPASS_TOKEN:
+        headers["X-JI-Watcher-Token"] = BYPASS_TOKEN
+    resp = requests.get(API_URL, headers=headers, timeout=30)
     resp.raise_for_status()
     return [{"id": p["id"], "link": p.get("link", "")} for p in resp.json()]
 

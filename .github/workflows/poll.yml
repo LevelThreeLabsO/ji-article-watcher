@@ -35,6 +35,7 @@ jobs:
       - run: python poll.py
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          JI_BYPASS_TOKEN: ${{ secrets.JI_BYPASS_TOKEN }}
 
       - name: Commit updated state
         run: |
