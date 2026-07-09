@@ -1,20 +1,18 @@
 name: JI article watcher
 
 on:
-  # PRIMARY trigger: an external pinger (cron-job.org) calls this every 5 min
-  # via the workflow_dispatch API — that's what gives us reliable 5-min cadence.
+  # Pinged every ~2 min by cron-job.org via the workflow_dispatch API.
   workflow_dispatch:
-  # FALLBACK only: GitHub's own schedule is laggy/best-effort (multi-hour gaps
-  # observed), but if the pinger ever stops, this keeps the watcher alive rather
-  # than going silent. Concurrency + the state file prevent any double-posting.
+  # Laggy best-effort fallback if the pinger ever stops.
   schedule:
     - cron: "*/15 * * * *"
 
-# Allow the job to commit the updated state file back to the repo.
+# Needed so poll.py can commit the updated state file back to the repo.
 permissions:
   contents: write
 
-# If a run is still going when the next tick fires, let it finish; don't stack.
+# One run at a time. poll.py also re-checks the state per-article, so even if two
+# runs overlap they won't post the same article twice.
 concurrency:
   group: poll
   cancel-in-progress: false
@@ -24,28 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - run: pip install -r requirements.txt
-
-      - run: python poll.py
+      - run: python3 poll.py
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           JI_BYPASS_TOKEN: ${{ secrets.JI_BYPASS_TOKEN }}
-
-      - name: Commit updated state
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add watcher_state.json
-          # --cached so this also catches a brand-new (previously untracked) file.
-          if git diff --cached --quiet; then
-            echo "No state change to commit."
-          else
-            git commit -m "Update watcher state [skip ci]"
-            git push
-          fi
