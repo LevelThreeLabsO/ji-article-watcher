@@ -26,3 +26,13 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           JI_BYPASS_TOKEN: ${{ secrets.JI_BYPASS_TOKEN }}
+
+      # Piggyback ping to ji-www-watcher so it fires reliably too.
+      # continue-on-error: this job stays green even if the WWW trigger fails.
+      # WWW watcher also has its own */5 GitHub cron as fallback if this stops firing.
+      - name: Trigger WWW watcher
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          GH_TOKEN: ${{ secrets.WWW_WATCHER_PAT }}
+        run: gh workflow run poll.yml -R sruli-hue/ji-www-watcher
