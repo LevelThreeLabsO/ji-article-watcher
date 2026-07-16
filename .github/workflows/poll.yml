@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
   # Laggy best-effort fallback if the pinger ever stops.
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
 
 # Needed so poll.py can commit the updated state file back to the repo.
 permissions:
