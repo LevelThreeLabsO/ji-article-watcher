@@ -27,12 +27,21 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           JI_BYPASS_TOKEN: ${{ secrets.JI_BYPASS_TOKEN }}
 
-      # Piggyback ping to ji-www-watcher so it fires reliably too.
+      # Piggyback pings to ji-www-watcher — twice per run (immediate + +60s)
+      # so WWW effectively polls every ~1 min. Article-watcher itself fires
+      # every ~2 min via cron-job.org.
       # continue-on-error: this job stays green even if the WWW trigger fails.
-      # WWW watcher also has its own */5 GitHub cron as fallback if this stops firing.
-      - name: Trigger WWW watcher
+      # WWW watcher also has its own */5 GitHub cron as fallback.
+      - name: Trigger WWW watcher (immediate)
         continue-on-error: true
         timeout-minutes: 1
         env:
           GH_TOKEN: ${{ secrets.WWW_WATCHER_PAT }}
         run: gh workflow run poll.yml -R LevelThreeLabsO/ji-www-watcher --ref main
+
+      - name: Trigger WWW watcher (+60s)
+        continue-on-error: true
+        timeout-minutes: 2
+        env:
+          GH_TOKEN: ${{ secrets.WWW_WATCHER_PAT }}
+        run: sleep 60 && gh workflow run poll.yml -R LevelThreeLabsO/ji-www-watcher --ref main
