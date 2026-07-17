@@ -35,4 +35,4 @@ jobs:
         timeout-minutes: 1
         env:
           GH_TOKEN: ${{ secrets.WWW_WATCHER_PAT }}
-        run: gh workflow run poll.yml -R sruli-hue/ji-www-watcher --ref main
+        run: gh workflow run poll.yml -R LevelThreeLabsO/ji-www-watcher --ref main
