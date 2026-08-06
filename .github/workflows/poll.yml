@@ -26,15 +26,5 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           JI_BYPASS_TOKEN: ${{ secrets.JI_BYPASS_TOKEN }}
-
-      # Piggyback ping to ji-www-watcher — once per run (~every 2 min).
-      # (Removed the old +60s second trigger: its `sleep 60` held a runner
-      # idle for a minute every cycle and spawned an extra job, which made
-      # GitHub runner-queue backups worse. WWW still has its own */5 cron.)
-      # continue-on-error: this job stays green even if the WWW trigger fails.
-      - name: Trigger WWW watcher
-        continue-on-error: true
-        timeout-minutes: 1
-        env:
-          GH_TOKEN: ${{ secrets.WWW_WATCHER_PAT }}
-        run: gh workflow run poll.yml -R LevelThreeLabsO/ji-www-watcher --ref main
+      # NOTE: this watcher no longer triggers ji-www-watcher. Cross-triggering was
+      # a dispatch-storm source (2026-08-06). WWW runs on its own */5 schedule.
