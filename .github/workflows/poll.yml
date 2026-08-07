@@ -26,5 +26,38 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           JI_BYPASS_TOKEN: ${{ secrets.JI_BYPASS_TOKEN }}
-      # NOTE: this watcher no longer triggers ji-www-watcher. Cross-triggering was
-      # a dispatch-storm source (2026-08-06). WWW runs on its own */5 schedule.
+      # Piggyback ping to ji-www-watcher so it fires every ~1 min.
+      # Safety against dispatch storms (like 2026-08-06 GH outage): skip if the
+      # WWW watcher already has >=3 queued or in-progress runs. That prevents us
+      # from piling up dispatches when GitHub can't process them.
+      # continue-on-error: article-watcher stays green if trigger fails.
+      - name: Trigger WWW watcher (immediate)
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          GH_TOKEN: ${{ secrets.WWW_WATCHER_PAT }}
+        run: |
+          backlog=$(gh run list -R LevelThreeLabsO/ji-www-watcher \
+                     --workflow poll.yml --limit 10 \
+                     --json status -q '[.[] | select(.status=="queued" or .status=="in_progress")] | length')
+          if [ "${backlog:-0}" -ge 3 ]; then
+            echo "WWW watcher backlog is $backlog — skipping dispatch to avoid pileup."
+            exit 0
+          fi
+          gh workflow run poll.yml -R LevelThreeLabsO/ji-www-watcher --ref main
+
+      - name: Trigger WWW watcher (+60s)
+        continue-on-error: true
+        timeout-minutes: 2
+        env:
+          GH_TOKEN: ${{ secrets.WWW_WATCHER_PAT }}
+        run: |
+          sleep 60
+          backlog=$(gh run list -R LevelThreeLabsO/ji-www-watcher \
+                     --workflow poll.yml --limit 10 \
+                     --json status -q '[.[] | select(.status=="queued" or .status=="in_progress")] | length')
+          if [ "${backlog:-0}" -ge 3 ]; then
+            echo "WWW watcher backlog is $backlog — skipping dispatch to avoid pileup."
+            exit 0
+          fi
+          gh workflow run poll.yml -R LevelThreeLabsO/ji-www-watcher --ref main
