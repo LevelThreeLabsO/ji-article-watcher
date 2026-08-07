@@ -61,3 +61,30 @@ jobs:
             exit 0
           fi
           gh workflow run poll.yml -R LevelThreeLabsO/ji-www-watcher --ref main
+
+      # Cadence health check: article-watcher runs every ~2 min like clockwork,
+      # so it's a natural heartbeat to notice if WWW watcher goes quiet. If the
+      # last successful WWW run was between 10 and 12 min ago, ping Slack ONCE
+      # (the 2-min alert window means only one article-watcher run will fire it
+      # per outage, no spam). Silence beyond that = we've already alerted.
+      - name: Alert if WWW cadence has dropped
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.WWW_WATCHER_PAT }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          last_success=$(gh run list -R LevelThreeLabsO/ji-www-watcher \
+                          --workflow poll.yml --status success --limit 1 \
+                          --json createdAt -q '.[0].createdAt')
+          if [ -z "$last_success" ]; then exit 0; fi
+          gap=$(python3 -c "
+          from datetime import datetime, timezone
+          ts = datetime.fromisoformat('$last_success'.replace('Z','+00:00'))
+          print(int((datetime.now(timezone.utc) - ts).total_seconds() // 60))
+          ")
+          echo "Last WWW success was $gap minutes ago."
+          if [ "$gap" -ge 10 ] && [ "$gap" -lt 12 ]; then
+            curl -sS -X POST -H 'Content-Type: application/json' \
+              --data "{\"username\":\"LB Watcher\",\"text\":\":warning: *LB Watcher: no successful WWW run in ${gap} minutes.* Should be running every ~1 min — something's up. Check https://github.com/LevelThreeLabsO/ji-www-watcher/actions\"}" \
+              "$SLACK_WEBHOOK_URL" || true
+          fi
