@@ -21,6 +21,7 @@ only) so runs are fast, which also minimizes overlap.
 import json
 import os
 import subprocess
+import time
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -51,7 +52,11 @@ def _get_json(url):
 
 
 def fetch_posts():
-    return [{"id": p["id"], "link": p.get("link", "")} for p in _get_json(API_URL)]
+    # Cache-bust: the WP feed is edge-cached (Cloudflare, max-age=600), so a static
+    # URL can serve a stale copy for up to ~10 min after a post goes live. A changing
+    # param makes each poll a unique URL -> fresh fetch -> ~2-min lag instead of ~10.
+    url = f"{API_URL}&_cb={int(time.time())}"
+    return [{"id": p["id"], "link": p.get("link", "")} for p in _get_json(url)]
 
 
 def _parse(text):
