@@ -71,7 +71,8 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.WWW_WATCHER_PAT }}
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          # Post to the LB Watcher channel, NOT article-watcher's #echochamber.
+          LB_ALERT_WEBHOOK: ${{ secrets.LB_ALERT_WEBHOOK }}
         run: |
           last_success=$(gh run list -R LevelThreeLabsO/ji-www-watcher \
                           --workflow poll.yml --status success --limit 1 \
@@ -86,5 +87,5 @@ jobs:
           if [ "$gap" -ge 10 ] && [ "$gap" -lt 12 ]; then
             curl -sS -X POST -H 'Content-Type: application/json' \
               --data "{\"username\":\"LB Watcher\",\"text\":\":warning: *LB Watcher: no successful WWW run in ${gap} minutes.* Should be running every ~1 min — something's up. Check https://github.com/LevelThreeLabsO/ji-www-watcher/actions\"}" \
-              "$SLACK_WEBHOOK_URL" || true
+              "$LB_ALERT_WEBHOOK" || true
           fi
