@@ -63,10 +63,11 @@ jobs:
           gh workflow run poll.yml -R LevelThreeLabsO/ji-www-watcher --ref main
 
       # Cadence health check: article-watcher runs every ~2 min like clockwork,
-      # so it's a natural heartbeat to notice if WWW watcher goes quiet. If the
-      # last successful WWW run was between 10 and 12 min ago, ping Slack ONCE
-      # (the 2-min alert window means only one article-watcher run will fire it
-      # per outage, no spam). Silence beyond that = we've already alerted.
+      # so it's a natural heartbeat to notice if WWW watcher goes quiet.
+      # Fires ONCE per outage: alerts when gap first crosses 10 min, then stays
+      # quiet until this watcher sees that gap drop back under 10 min at least
+      # once (meaning WWW recovered). Prevents the "every 10 min" spam that
+      # happened during GitHub's own degraded-runners periods.
       - name: Alert if WWW cadence has dropped
         continue-on-error: true
         env:
@@ -84,8 +85,29 @@ jobs:
           print(int((datetime.now(timezone.utc) - ts).total_seconds() // 60))
           ")
           echo "Last WWW success was $gap minutes ago."
-          if [ "$gap" -ge 10 ] && [ "$gap" -lt 12 ]; then
-            curl -sS -X POST -H 'Content-Type: application/json' \
-              --data "{\"username\":\"LB Watcher\",\"text\":\":warning: *LB Watcher: no successful WWW run in ${gap} minutes.* Should be running every ~1 min — something's up. Check https://github.com/LevelThreeLabsO/ji-www-watcher/actions\"}" \
-              "$LB_ALERT_WEBHOOK" || true
+          if [ "$gap" -lt 10 ]; then exit 0; fi
+          # Suppress if a recent prior article-watcher run already saw gap >= 10
+          # (same outage). Scan the last 15 completed article-watcher runs' logs
+          # for "Last WWW success was N minutes ago"; if the newest N is >= 10,
+          # we already alerted — stay quiet.
+          prior_runs=$(gh run list -R LevelThreeLabsO/ji-article-watcher \
+                        --workflow poll.yml --status completed --limit 15 \
+                        --json databaseId -q '.[].databaseId')
+          already_alerted=0
+          for id in $prior_runs; do
+            prior_gap=$(gh run view -R LevelThreeLabsO/ji-article-watcher "$id" --log 2>/dev/null \
+                        | grep -oE "Last WWW success was [0-9]+ minutes ago" \
+                        | head -1 | grep -oE "[0-9]+" || true)
+            if [ -z "$prior_gap" ]; then continue; fi
+            if [ "$prior_gap" -ge 10 ]; then
+              already_alerted=1
+            fi
+            break  # only look at the most recent prior run that logged a gap
+          done
+          if [ "$already_alerted" = "1" ]; then
+            echo "Previous article-watcher run already saw gap >= 10 — suppressing duplicate alert."
+            exit 0
           fi
+          curl -sS -X POST -H 'Content-Type: application/json' \
+            --data "{\"username\":\"LB Watcher\",\"text\":\":warning: *LB Watcher: no successful WWW run in ${gap} minutes.* Should be running every ~1 min — something's up. Check https://github.com/LevelThreeLabsO/ji-www-watcher/actions\"}" \
+            "$LB_ALERT_WEBHOOK" || true
