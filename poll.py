@@ -88,8 +88,12 @@ def latest_seen():
 
 
 def record(seen):
-    """Push the state as the union of ours + origin's; retry on a concurrent-push race."""
-    for _ in range(5):
+    """Push the state as the union of ours + origin's. A post that doesn't get
+    recorded gets RE-POSTED by the next run, so persisting matters: retry hard
+    (with backoff, to ride out a concurrent-push race or a transient GitHub
+    hiccup) and, if it still fails, say so loudly instead of failing silently."""
+    push = None
+    for attempt in range(8):
         git("fetch", "-q", "origin", "main")
         remote = git("show", "origin/main:watcher_state.json")
         merged = seen | (_parse(remote.stdout) if remote.returncode == 0 else set())
@@ -99,9 +103,13 @@ def record(seen):
         if git("diff", "--cached", "--quiet").returncode == 0:
             return  # origin already has everything we do
         git(*GIT_ID, "commit", "-q", "-m", "Update watcher state [skip ci]")
-        if git("push", "-q", "origin", "HEAD:main").returncode == 0:
+        push = git("push", "-q", "origin", "HEAD:main")
+        if push.returncode == 0:
             return
-        # push lost the race — loop, re-merge against the new origin, try again
+        time.sleep(2 + attempt * 2)  # back off, then re-merge against new origin
+    err = (push.stderr.strip()[:200] if push else "unknown")
+    print(f"WARNING: failed to record state after 8 attempts — article may be "
+          f"re-posted next run. Last git error: {err}", flush=True)
 
 
 def post_to_slack(text):
