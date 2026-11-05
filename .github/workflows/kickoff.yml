@@ -1,0 +1,49 @@
+name: Kickoff WhatsApp post
+
+# Weekday mornings: wait for today's Daily Kickoff, build the WhatsApp post
+# (Kickoff + first 4 stories, link.ji.news short links), DM it to Sruli on Slack.
+# Separate from poll.yml; touches no state files.
+on:
+  workflow_dispatch:
+  schedule:
+    # GitHub's scheduler can run late or skip, so there are two tries.
+    # 11:30 UTC = 6:30am EST / 7:30am EDT. The run waits for the Kickoff.
+    - cron: "30 11 * * 1-5"
+    - cron: "45 12 * * 1-5"
+
+permissions:
+  actions: read
+
+concurrency:
+  group: kickoff
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      # A finished run today (posted, or posted a warning) means the backup
+      # cron has nothing to do. Manual runs always go ahead.
+      - name: Skip if today's run already finished
+        id: done
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TZ: America/New_York
+        run: |
+          today=$(date +%F)
+          n=$(gh run list -R "$GITHUB_REPOSITORY" --workflow kickoff.yml \
+                --limit 10 --json createdAt,conclusion \
+                -q "[.[] | select(.conclusion==\"success\" or .conclusion==\"failure\") | select(.createdAt | fromdateiso8601 | strflocaltime(\"%F\") == \"$today\")] | length" \
+              || echo 0)
+          echo "already=$([ "${n:-0}" -gt 0 ] && echo yes || echo no)" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+      - uses: actions/checkout@v4
+        if: steps.done.outputs.already != 'yes' || github.event_name == 'workflow_dispatch'
+      - run: python3 kickoff_post.py
+        if: steps.done.outputs.already != 'yes' || github.event_name == 'workflow_dispatch'
+        env:
+          TZ: America/New_York
+          BITLY_TOKEN: ${{ secrets.BITLY_TOKEN }}
+          KICKOFF_SLACK_WEBHOOK: ${{ secrets.KICKOFF_SLACK_WEBHOOK }}
+          JI_BYPASS_TOKEN: ${{ secrets.JI_BYPASS_TOKEN }}
