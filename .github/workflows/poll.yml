@@ -10,6 +10,7 @@ on:
 # Needed so poll.py can commit the updated state file back to the repo.
 permissions:
   contents: write
+  actions: write   # lets the Kickoff step below start kickoff.yml
 
 # One run at a time. poll.py also re-checks the state per-article, so even if two
 # runs overlap they won't post the same article twice.
@@ -26,6 +27,27 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           JI_BYPASS_TOKEN: ${{ secrets.JI_BYPASS_TOKEN }}
+      # Weekday mornings 6:30-10am ET: start the Kickoff WhatsApp job once a day
+      # (kickoff.yml). GitHub's own schedule for it was hours late or skipped.
+      # One quick API call per run in that window; never blocks the watcher.
+      - name: Start Kickoff WhatsApp job
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TZ: America/New_York
+        run: |
+          [ "$(date +%u)" -le 5 ] || exit 0
+          hm=$(date +%H%M)
+          { [ "$hm" -ge 630 ] && [ "$hm" -lt 1000 ]; } || exit 0
+          today=$(date +%F)
+          n=$(gh run list -R "$GITHUB_REPOSITORY" --workflow kickoff.yml --limit 5 \
+                --json createdAt -q "[.[] | select(.createdAt | fromdateiso8601 | strflocaltime(\"%F\") == \"$today\")] | length")
+          if [ "${n:-1}" -eq 0 ]; then
+            gh workflow run kickoff.yml -R "$GITHUB_REPOSITORY" --ref main
+            echo "Started today's Kickoff job."
+          fi
       # Piggyback ping to ji-www-watcher so it fires every ~1 min.
       # Safety against dispatch storms (like 2026-08-06 GH outage): skip if the
       # WWW watcher already has >=3 queued or in-progress runs. That prevents us
