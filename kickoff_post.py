@@ -173,6 +173,12 @@ def main():
         slack(f":warning: Couldn't build today's Kickoff WhatsApp post: {e}\n"
               "Run `todays` on your Mac to do it by hand.")
         raise
+    # Normally started by the article watcher before 10am ET. A later start
+    # means that trigger failed and only GitHub's backup schedule fired.
+    if datetime.datetime.now(ET).hour >= 10:
+        post = (":warning: Late: the morning trigger didn't fire, so this came from "
+                "the backup schedule. Check the article watcher's cron-job.org pinger.\n\n"
+                + post)
     slack(post)
 
 

@@ -18,6 +18,8 @@ on:
     # 11:30 UTC = 6:30am EST / 7:30am EDT. The run waits for the Kickoff.
     - cron: "30 11 * * 1-5"
     - cron: "45 12 * * 1-5"
+    # Watchdog: if nothing ran by 10am ET, this posts with a "Late" warning.
+    - cron: "30 15 * * 1-5"
 
 permissions:
   actions: read
