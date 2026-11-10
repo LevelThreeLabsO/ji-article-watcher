@@ -155,7 +155,7 @@ def build():
     if len(stories) < NUM_STORIES:
         raise RuntimeError(f"only found {len(stories)} stories in {kickoff_url}")
 
-    lines = [f"Good morning! Check out today's full Daily Kickoff — 👉 {headline} — "
+    lines = [f"Good morning! Check out today's full Daily Kickoff — {headline} — "
              f"{shorten(kickoff_url)}", "", "More stories:"]
     for url, tagline in stories:
         title = article_title(url)
