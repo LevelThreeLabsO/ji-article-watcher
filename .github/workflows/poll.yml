@@ -43,7 +43,9 @@ jobs:
           { [ "$hm" -ge 630 ] && [ "$hm" -lt 1000 ]; } || exit 0
           today=$(date +%F)
           n=$(gh run list -R "$GITHUB_REPOSITORY" --workflow kickoff.yml --limit 5 \
-                --json createdAt -q "[.[] | select(.createdAt | fromdateiso8601 | strflocaltime(\"%F\") == \"$today\")] | length")
+                --json createdAt,status -q "[.[] | select(.status != \"queued\" or (now - (.createdAt | fromdateiso8601)) < 900) | select(.createdAt | fromdateiso8601 | strflocaltime(\"%F\") == \"$today\")] | length")
+          # A run GitHub left stuck in "queued" for 15+ min doesn't count, so
+          # we retry instead of waiting on it all day (happened 2026-11-16).
           if [ "${n:-1}" -eq 0 ]; then
             gh workflow run kickoff.yml -R "$GITHUB_REPOSITORY" --ref main
             echo "Started today's Kickoff job."
